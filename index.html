@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>BSearch 查經（iPad）</title>
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#8c5e3b">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  :root{
+    --brown:#8c5e3b;
+    --brown-dark:#6e4a2e;
+    --cream:#f7f3ec;
+    --ink:#2a2420;
+    --line:#e2d9c9;
+    --accent:#a8402a;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    font-family:-apple-system, "PingFang TC", "Helvetica Neue", sans-serif;
+    background:var(--cream);
+    color:var(--ink);
+    display:flex;
+    flex-direction:column;
+    overscroll-behavior:none;
+  }
+  header{
+    background:var(--brown);
+    color:#fff;
+    padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-shrink:0;
+  }
+  header h1{font-size:1.05em;margin:0;flex:1;font-weight:600;}
+  header button{
+    background:rgba(255,255,255,.15);
+    border:none;color:#fff;
+    padding:8px 12px;border-radius:8px;
+    font-size:.95em;
+  }
+  header select{
+    background:rgba(255,255,255,.15);
+    border:none;color:#fff;
+    padding:8px 10px;border-radius:8px;
+    font-size:.9em;font-weight:600;
+    -webkit-appearance:none;appearance:none;
+  }
+  #main{flex:1;overflow:hidden;position:relative;}
+  .view{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:none;}
+  .view.active{display:block;}
+
+  /* ---- 书卷选单 ---- */
+  #bookView{padding:16px;}
+  .testament-cols{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;}
+  .testament-title{font-size:1em;color:var(--brown-dark);margin:0 4px 10px;font-weight:700;}
+  .book-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .book-btn{
+    padding:11px 6px;text-align:center;
+    background:#fff;border:1px solid var(--line);border-radius:10px;
+    font-size:.82em;font-weight:600;color:var(--ink);
+    line-height:1.3;
+  }
+  .book-btn .en3{color:#9a8b74;font-weight:500;margin-right:3px;}
+  .book-btn:active{background:var(--accent);color:#fff;}
+  .book-btn:active .en3{color:#fdd;}
+  @media (max-width:700px){
+    .testament-cols{grid-template-columns:1fr;gap:0;}
+    .testament-title{margin-top:18px;}
+  }
+
+  /* ---- 章节选单（弹层） ---- */
+  #chapterSheet{
+    position:fixed;inset:0;background:rgba(0,0,0,.35);
+    display:none;align-items:flex-end;z-index:50;
+  }
+  #chapterSheet.show{display:flex;}
+  .sheet-panel{
+    background:#fff;width:100%;max-height:70vh;border-radius:16px 16px 0 0;
+    padding:16px;padding-bottom:calc(env(safe-area-inset-bottom) + 16px);
+    overflow-y:auto;
+  }
+  .sheet-title{font-weight:700;font-size:1.1em;margin-bottom:12px;}
+  .chapter-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
+  .chapter-btn{
+    padding:10px 0;text-align:center;background:var(--cream);
+    border-radius:8px;font-weight:600;font-size:.95em;
+  }
+  .chapter-btn:active{background:var(--accent);color:#fff;}
+
+  /* ---- 阅读画面 ---- */
+  #readView .reader{max-width:640px;margin:0 auto;padding:20px 20px 80px;}
+  #readView h2{font-size:1.3em;color:var(--brown-dark);margin:0 0 4px;}
+  #readView .chnum{color:#999;font-size:.9em;margin-bottom:18px;}
+  .ext-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:20px;}
+  .ext-label{font-size:.82em;color:#9a8b74;margin-right:2px;}
+  .ext-btn{
+    display:inline-block;padding:5px 12px;border:1px solid var(--line);border-radius:16px;
+    font-size:.82em;font-weight:600;color:var(--brown-dark);background:var(--cream);
+    text-decoration:none;
+  }
+  .ext-btn:active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .verse{display:block;margin-bottom:.55em;line-height:1.9;font-size:1.08em;}
+  .verse .vn{color:var(--accent);font-weight:700;font-size:.78em;margin-right:.3em;vertical-align:1px;}
+  .verse.hit{background:linear-gradient(transparent 12%,#fff3b0 12%,#fff3b0 88%,transparent 88%);}
+  .chapnav{
+    display:flex;justify-content:space-between;max-width:640px;margin:0 auto;padding:0 20px 30px;
+  }
+  .chapnav button{
+    flex:1;margin:0 6px;padding:12px;border:1px solid var(--line);background:#fff;border-radius:10px;font-size:1em;
+  }
+  .chapnav button:disabled{opacity:.35;}
+
+  /* ---- 检索画面 ---- */
+  #searchView{padding:16px;}
+  .scope-panel{
+    background:#fff;border:1px solid var(--line);border-radius:12px;
+    padding:12px 14px;margin-bottom:14px;
+  }
+  .scope-title{font-weight:700;font-size:.9em;color:var(--brown-dark);margin-bottom:8px;}
+  .scope-quickbtns{display:flex;gap:8px;margin-bottom:10px;}
+  .scope-quickbtns button{
+    flex:1;padding:8px 0;border:1px solid var(--line);background:var(--cream);
+    border-radius:8px;font-size:.85em;font-weight:600;color:var(--ink);
+  }
+  .scope-quickbtns button.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .scope-list{
+    max-height:120px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:2px 10px;
+    border-top:1px solid var(--line);padding-top:8px;
+  }
+  .scope-item{display:flex;align-items:center;gap:6px;padding:4px 2px;font-size:.85em;}
+  .scope-item input{flex-shrink:0;}
+  .scope-item label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .scope-item label .en3{color:#9a8b74;font-weight:500;margin-right:3px;}
+  .search-bar{display:flex;gap:8px;margin-bottom:6px;}
+  .search-bar input{
+    flex:1;padding:12px 14px;border:1px solid var(--line);border-radius:10px;font-size:1em;background:#fff;
+  }
+  .search-bar button{padding:0 18px;border:none;background:var(--accent);color:#fff;border-radius:10px;font-weight:700;}
+  .search-hint{font-size:.82em;color:#8a7f6e;margin-bottom:14px;}
+  .result-count{font-size:.9em;color:#6b5f4e;margin-bottom:10px;}
+  .result-item{
+    background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;
+  }
+  .result-ref{color:var(--accent);font-weight:700;font-size:.92em;display:block;margin-bottom:4px;}
+  .result-text{font-size:1em;line-height:1.7;}
+  mark{background:#fff3b0;color:inherit;border-radius:2px;padding:0 1px;}
+
+  /* ---- 底部标签栏 ---- */
+  nav.tabbar{
+    display:flex;border-top:1px solid var(--line);background:#fff;
+    padding-bottom:env(safe-area-inset-bottom);flex-shrink:0;
+  }
+  nav.tabbar button{
+    flex:1;padding:12px 0 10px;background:none;border:none;color:#8a7f6e;font-size:.85em;font-weight:600;
+  }
+  nav.tabbar button.active{color:var(--accent);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="headerTitle">BSearch 查經</h1>
+  <select id="versionSelect" aria-label="選擇版本"></select>
+  <button id="fontMinus">A-</button>
+  <button id="fontPlus">A+</button>
+</header>
+
+<div id="main">
+  <!-- 书卷选单 -->
+  <div id="bookView" class="view active">
+    <div class="testament-cols">
+      <div>
+        <div class="testament-title">舊約 Old Testament</div>
+        <div class="book-grid" id="otGrid"></div>
+      </div>
+      <div>
+        <div class="testament-title">新約 New Testament</div>
+        <div class="book-grid" id="ntGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 阅读画面 -->
+  <div id="readView" class="view">
+    <div class="reader" id="readerContent"></div>
+    <div class="chapnav">
+      <button id="prevChap">← 上一章</button>
+      <button id="nextChap">下一章 →</button>
+    </div>
+  </div>
+
+  <!-- 检索画面 -->
+  <div id="searchView" class="view">
+    <div class="scope-panel">
+      <div class="scope-title">2. 選擇經卷（預設全選）</div>
+      <div class="scope-quickbtns">
+        <button data-scope="all">全部</button>
+        <button data-scope="ot">舊約 OT</button>
+        <button data-scope="nt">新約 NT</button>
+      </div>
+      <div class="scope-list" id="scopeList"></div>
+    </div>
+    <div class="search-bar">
+      <input id="searchInput" placeholder="例如：耶穌 門徒 !彼得" enterkeyhint="search">
+      <button id="searchBtn">檢索</button>
+    </div>
+    <div class="search-hint">空格 = AND　！= NOT（例：!巴力 排除含巴力的經文）</div>
+    <div class="result-count" id="resultCount"></div>
+    <div id="resultList"></div>
+  </div>
+</div>
+
+<div id="chapterSheet">
+  <div class="sheet-panel">
+    <div class="sheet-title" id="sheetBookName"></div>
+    <div class="chapter-grid" id="sheetChapters"></div>
+  </div>
+</div>
+
+<nav class="tabbar">
+  <button id="tabBooks" class="active">📖 經卷</button>
+  <button id="tabSearch">🔍 檢索</button>
+</nav>
+
+<script src="data/wpCuvVerses.js"></script>
+<script src="data/wpNcvVerses.js"></script>
+<script src="data/wpKjvVerses.js"></script>
+<script src="data/zhjUrls.js"></script>
+<script>
+// ==================== 書卷基礎資料 ====================
+const BOOK_LIST = [
+  {id:"01",zh:"創世記",en3:"Gen",en:"Genesis",ot:1},{id:"02",zh:"出埃及記",en3:"Exo",en:"Exodus",ot:1},{id:"03",zh:"利未記",en3:"Lev",en:"Leviticus",ot:1},
+  {id:"04",zh:"民數記",en3:"Num",en:"Numbers",ot:1},{id:"05",zh:"申命記",en3:"Deu",en:"Deuteronomy",ot:1},{id:"06",zh:"約書亞記",en3:"Jos",en:"Joshua",ot:1},
+  {id:"07",zh:"士師記",en3:"Jdg",en:"Judges",ot:1},{id:"08",zh:"路得記",en3:"Rth",en:"Ruth",ot:1},{id:"09",zh:"撒母耳記上",en3:"1Sa",en:"1 Samuel",ot:1},
+  {id:"10",zh:"撒母耳記下",en3:"2Sa",en:"2 Samuel",ot:1},{id:"11",zh:"列王紀上",en3:"1Ki",en:"1 Kings",ot:1},{id:"12",zh:"列王紀下",en3:"2Ki",en:"2 Kings",ot:1},
+  {id:"13",zh:"歷代志上",en3:"1Ch",en:"1 Chronicles",ot:1},{id:"14",zh:"歷代志下",en3:"2Ch",en:"2 Chronicles",ot:1},{id:"15",zh:"以斯拉記",en3:"Ezr",en:"Ezra",ot:1},
+  {id:"16",zh:"尼希米記",en3:"Neh",en:"Nehemiah",ot:1},{id:"17",zh:"以斯帖記",en3:"Est",en:"Esther",ot:1},{id:"18",zh:"約伯記",en3:"Job",en:"Job",ot:1},
+  {id:"19",zh:"詩篇",en3:"Psa",en:"Psalms",ot:1},{id:"20",zh:"箴言",en3:"Pro",en:"Proverbs",ot:1},{id:"21",zh:"傳道書",en3:"Ecc",en:"Ecclesiastes",ot:1},
+  {id:"22",zh:"雅歌",en3:"Son",en:"Song of Solomon",ot:1},{id:"23",zh:"以賽亞書",en3:"Isa",en:"Isaiah",ot:1},{id:"24",zh:"耶利米書",en3:"Jer",en:"Jeremiah",ot:1},
+  {id:"25",zh:"耶利米哀歌",en3:"Lam",en:"Lamentations",ot:1},{id:"26",zh:"以西結書",en3:"Eze",en:"Ezekiel",ot:1},{id:"27",zh:"但以理書",en3:"Dan",en:"Daniel",ot:1},
+  {id:"28",zh:"何西阿書",en3:"Hos",en:"Hosea",ot:1},{id:"29",zh:"約珥書",en3:"Joe",en:"Joel",ot:1},{id:"30",zh:"阿摩司書",en3:"Amo",en:"Amos",ot:1},
+  {id:"31",zh:"俄巴底亞書",en3:"Oba",en:"Obadiah",ot:1},{id:"32",zh:"約拿書",en3:"Jon",en:"Jonah",ot:1},{id:"33",zh:"彌迦書",en3:"Mic",en:"Micah",ot:1},
+  {id:"34",zh:"那鴻書",en3:"Nah",en:"Nahum",ot:1},{id:"35",zh:"哈巴谷書",en3:"Hab",en:"Habakkuk",ot:1},{id:"36",zh:"西番雅書",en3:"Zep",en:"Zephaniah",ot:1},
+  {id:"37",zh:"哈該書",en3:"Hag",en:"Haggai",ot:1},{id:"38",zh:"撒迦利亞書",en3:"Zec",en:"Zechariah",ot:1},{id:"39",zh:"瑪拉基書",en3:"Mal",en:"Malachi",ot:1},
+  {id:"40",zh:"馬太福音",en3:"Mat",en:"Matthew",ot:0},{id:"41",zh:"馬可福音",en3:"Mar",en:"Mark",ot:0},{id:"42",zh:"路加福音",en3:"Luk",en:"Luke",ot:0},
+  {id:"43",zh:"約翰福音",en3:"Jhn",en:"John",ot:0},{id:"44",zh:"使徒行傳",en3:"Act",en:"Acts",ot:0},{id:"45",zh:"羅馬書",en3:"Rom",en:"Romans",ot:0},
+  {id:"46",zh:"哥林多前書",en3:"1Co",en:"1 Corinthians",ot:0},{id:"47",zh:"哥林多後書",en3:"2Co",en:"2 Corinthians",ot:0},{id:"48",zh:"加拉太書",en3:"Gal",en:"Galatians",ot:0},
+  {id:"49",zh:"以弗所書",en3:"Eph",en:"Ephesians",ot:0},{id:"50",zh:"腓立比書",en3:"Php",en:"Philippians",ot:0},{id:"51",zh:"歌羅西書",en3:"Col",en:"Colossians",ot:0},
+  {id:"52",zh:"帖撒羅尼迦前書",en3:"1Th",en:"1 Thessalonians",ot:0},{id:"53",zh:"帖撒羅尼迦後書",en3:"2Th",en:"2 Thessalonians",ot:0},{id:"54",zh:"提摩太前書",en3:"1Ti",en:"1 Timothy",ot:0},
+  {id:"55",zh:"提摩太後書",en3:"2Ti",en:"2 Timothy",ot:0},{id:"56",zh:"提多書",en3:"Tit",en:"Titus",ot:0},{id:"57",zh:"腓利門書",en3:"Phm",en:"Philemon",ot:0},
+  {id:"58",zh:"希伯來書",en3:"Heb",en:"Hebrews",ot:0},{id:"59",zh:"雅各書",en3:"Jas",en:"James",ot:0},{id:"60",zh:"彼得前書",en3:"1Pe",en:"1 Peter",ot:0},
+  {id:"61",zh:"彼得後書",en3:"2Pe",en:"2 Peter",ot:0},{id:"62",zh:"約翰壹書",en3:"1Jn",en:"1 John",ot:0},{id:"63",zh:"約翰貳書",en3:"2Jn",en:"2 John",ot:0},
+  {id:"64",zh:"約翰參書",en3:"3Jn",en:"3 John",ot:0},{id:"65",zh:"猶大書",en3:"Jud",en:"Jude",ot:0},{id:"66",zh:"啟示錄",en3:"Rev",en:"Revelation",ot:0}
+];
+
+// ==================== 版本設定 ====================
+const VERSIONS = [
+  { key: "cuv", label: "和合本 CUV", varName: "WPCUVVerses" },
+  { key: "ncv", label: "新譯本 NCV", varName: "WPNCVVerses" },
+  { key: "kjv", label: "KJV", varName: "WPKJVVerses" }
+];
+function getVersionData(key) {
+  const v = VERSIONS.find(x => x.key === key);
+  if (!v) return {};
+  return (typeof window[v.varName] !== "undefined") ? window[v.varName] : {};
+}
+
+let currentVersionKey = localStorage.getItem("bsVersion") || VERSIONS[0].key;
+if (!VERSIONS.some(v => v.key === currentVersionKey)) currentVersionKey = VERSIONS[0].key;
+
+function VERSES() { return getVersionData(currentVersionKey); }
+
+function renderVersionSelect() {
+  const sel = document.getElementById("versionSelect");
+  sel.innerHTML = "";
+  VERSIONS.forEach(v => {
+    const opt = document.createElement("option");
+    opt.value = v.key;
+    opt.textContent = v.label;
+    sel.appendChild(opt);
+  });
+  sel.value = currentVersionKey;
+  sel.onchange = () => {
+    currentVersionKey = sel.value;
+    localStorage.setItem("bsVersion", currentVersionKey);
+    // 如果正在閱讀畫面，切版本後嘗試停在同一書卷/章節重新渲染
+    if (current.bookId && document.getElementById("readView").classList.contains("active")) {
+      openChapter(current.bookId, current.chapter);
+    }
+    // 如果檢索畫面有結果，重新搜一次
+    if (document.getElementById("searchInput").value.trim()) runSearch();
+  };
+}
+
+let current = { bookId: null, chapter: null };
+
+// ==================== 書卷選單 ====================
+function renderBookGrid() {
+  const otGrid = document.getElementById("otGrid");
+  const ntGrid = document.getElementById("ntGrid");
+  BOOK_LIST.forEach(b => {
+    const btn = document.createElement("button");
+    btn.className = "book-btn";
+    btn.innerHTML = `${b.id} <span class="en3">${b.en3}</span>${b.zh}`;
+    btn.onclick = () => openChapterSheet(b.id);
+    (b.ot ? otGrid : ntGrid).appendChild(btn);
+  });
+}
+
+function openChapterSheet(bookId) {
+  const book = VERSES()[bookId];
+  const meta = BOOK_LIST.find(b => b.id === bookId);
+  document.getElementById("sheetBookName").textContent = meta ? meta.zh : bookId;
+  const grid = document.getElementById("sheetChapters");
+  grid.innerHTML = "";
+  if (!book) {
+    grid.innerHTML = "<div style='grid-column:1/-1;color:#999;'>這個書卷還沒有索引資料</div>";
+  } else {
+    Object.keys(book.chapters).sort((a,b)=>+a-+b).forEach(ch => {
+      const btn = document.createElement("button");
+      btn.className = "chapter-btn";
+      btn.textContent = ch;
+      btn.onclick = () => { closeChapterSheet(); openChapter(bookId, ch); };
+      grid.appendChild(btn);
+    });
+  }
+  document.getElementById("chapterSheet").classList.add("show");
+}
+function closeChapterSheet(){ document.getElementById("chapterSheet").classList.remove("show"); }
+document.getElementById("chapterSheet").addEventListener("click", e => {
+  if (e.target.id === "chapterSheet") closeChapterSheet();
+});
+
+// ==================== 外部參考資源（依目前書卷/章節動態組網址） ====================
+// 「註解」(ccbiblestudy.org) 各書卷對應資料夾名，索引1~66對齊book id
+const SJZ_VOL_DIR = ["",
+  "01Gen/","02Exo/","03Lev/","04Num/","05Deut/","06Josh/","07Judg/","08Ruth/","09 1Sam/","10 2Sam/",
+  "11 1King/","12 2King/","13 1Chro/","14 2Chro/","15Ezra/","16Neh/","17Esth/","18Job/","19Psa/","20Prov/",
+  "21Eccl/","22Song/","23Isa/","24Jer/","25Lam/","26Ezek/","27Dan/","28Hosea/","29Joel/","30Amos/",
+  "31Obad/","32Jonah/","33Micah/","34Nah/","35Habak/","36Zeph/","37Hagg/","38Zech/","39Mal/",
+  "40Matt/","41Mark/","42Luke/","43John/","44Acts/","45Rom/","46 1Cor/","47 2Cor/","48Gal/","49Eph/",
+  "50Phil/","51Col/","52 1Thes/","53 2Thes/","54 1Tim/","55 2Tim/","56Titus/","57Philem/","58Heb/","59James/",
+  "60 1Pet/","61 2Pet/","62 1John/","63 2John/","64 3John/","65Jude/","66Rev/"
+];
+
+// 「註釋」(a2z.fhl.net 信望愛聖經註釋) 各書卷專屬engs縮寫，索引1~66對齊book id
+const FHC_ENGS = ["",
+  "Gen","Ex","Lev","Num","Deut","Josh","Judg","Ruth","1+Sam","2+Sam",
+  "1+Kin","2+Kin","1+Chr","2+Chr","Ezra","Neh","Esth","Job","Ps","Prov",
+  "Eccl","Song","Is","Jer","Lam","Ezek","Dan","Hos","Joel","Amos",
+  "Obad","Jon","Mic","Nah","Hab","Zeph","Hag","Zech","Mal",
+  "Matt","Mark","Luke","John","Acts","Rom","1+Cor","2+Cor","Gal","Eph",
+  "Phil","Col","1+Thess","2+Thess","1+Tim","2+Tim","Titus","Philem","Heb","James",
+  "1+Pet","2+Pet","1+John","2+John","3+John","Jude","Rev"
+];
+
+// 「查經」(bible.fhl.net) 各書卷中文單字縮寫，索引1~66對齊book id
+const FHL_BOOK_BRF = ["",
+  "創","出","利","民","申","書","士","得",
+  "撒上","撒下","王上","王下","代上","代下","拉","尼","斯",
+  "伯","詩","箴","傳","歌",
+  "賽","耶","哀","結","但",
+  "何","珥","摩","俄","拿","彌","鴻","哈","番","該","亞","瑪",
+  "太","可","路","約","徒",
+  "羅","林前","林後","加","弗","腓","西",
+  "帖前","帖後","提前","提後","多","門","來",
+  "雅","彼前","彼後","約一","約二","約三","猶",
+  "啟"
+];
+
+const EXTERNAL_LINKS = [
+  { label: "微讀", build: (b, ch) => `https://wdbible.app/bible/${b.en3.toLowerCase()}.${ch}.csbs?parallel=niv` },
+  { label: "研讀", build: (b, ch) => `https://wd.bible/exegesis/cunps-cunps/${b.en3.toLowerCase()}.${ch}` },
+  { label: "對照", build: (b, ch) => `https://wd.bible/verse/${b.en3.toLowerCase()}.${ch}.1.cunps` },
+  { label: "YouV", build: (b, ch) => `https://www.bible.com/bible/111/${b.en3.toLowerCase()}.${ch}.NIV?parallel=1392` },
+  { label: "NIrV", build: (b, ch) => `https://www.biblica.com/bible/nirv/${encodeURIComponent(b.en)}/${ch}/occbt/` },
+  { label: "禱讀", build: (b, ch) => (typeof zhjBibleUrls !== "undefined" && zhjBibleUrls[b.id] && zhjBibleUrls[b.id][String(ch)]) || null },
+  { label: "註解", build: (b, ch) => {
+      const idx = parseInt(b.id, 10);
+      const testament = idx <= 39 ? "Old Testament" : "New Testament";
+      const dir = SJZ_VOL_DIR[idx];
+      if (!dir) return null;
+      const chPadded = String(ch).padStart(2, "0");
+      return `https://www.ccbiblestudy.org/${testament}/${dir}/${b.id}CT${chPadded}.htm`;
+    } },
+  { label: "註釋", build: (b, ch) => {
+      const idx = parseInt(b.id, 10);
+      const engs = FHC_ENGS[idx];
+      if (!engs) return null;
+      return `https://a2z.fhl.net/php/pcom.php?book=3&engs=${engs}&chap=${ch}`;
+    } },
+  { label: "查經", build: (b, ch) => {
+      const idx = parseInt(b.id, 10);
+      const brf = FHL_BOOK_BRF[idx];
+      if (!brf) return null;
+      return `https://bible.fhl.net/NNUI/#/bible/${encodeURIComponent(brf)}${ch}:1`;
+    } }
+];
+
+function renderExternalLinks(bookId, chapter) {
+  const meta = BOOK_LIST.find(b => b.id === bookId);
+  if (!meta) return "";
+  let html = `<div class="ext-links"><span class="ext-label">網絡：</span>`;
+  EXTERNAL_LINKS.forEach(link => {
+    const url = link.build(meta, chapter);
+    if (!url) return; // 對照表沒有這一章的資料就跳過，不顯示壞連結
+    html += `<a class="ext-btn" href="${url}" target="_blank" rel="noopener noreferrer">${link.label}</a>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+// ==================== 閱讀畫面 ====================
+function openChapter(bookId, chapter) {
+  current = { bookId, chapter: String(chapter) };
+  const book = VERSES()[bookId];
+  const meta = BOOK_LIST.find(b => b.id === bookId);
+  const chapterData = book && book.chapters[current.chapter];
+
+  const box = document.getElementById("readerContent");
+  let html = `<h2>${meta.zh}</h2><div class="chnum">第 ${current.chapter} 章</div>`;
+  html += renderExternalLinks(bookId, current.chapter);
+  if (chapterData) {
+    Object.keys(chapterData).sort((a,b)=>+a-+b).forEach(vn => {
+      html += `<span class="verse" data-vn="${vn}"><span class="vn">${vn}</span>${escapeHtml(chapterData[vn])}</span>`;
+    });
+  } else {
+    html += `<p style="color:#999;">這個版本找不到這一章的內容</p>`;
+  }
+  box.innerHTML = html;
+
+  document.getElementById("headerTitle").textContent = `${meta.zh} ${current.chapter}章`;
+  updateChapNavButtons();
+  switchView("readView");
+  document.getElementById("main").querySelector("#readView").scrollTop = 0;
+}
+
+function updateChapNavButtons(){
+  const book = VERSES()[current.bookId];
+  const chapters = book ? Object.keys(book.chapters).map(Number).sort((a,b)=>a-b) : [];
+  const idx = chapters.indexOf(Number(current.chapter));
+  document.getElementById("prevChap").disabled = idx <= 0;
+  document.getElementById("nextChap").disabled = idx === -1 || idx >= chapters.length - 1;
+  document.getElementById("prevChap").onclick = () => { if (idx > 0) openChapter(current.bookId, chapters[idx-1]); };
+  document.getElementById("nextChap").onclick = () => { if (idx < chapters.length-1) openChapter(current.bookId, chapters[idx+1]); };
+}
+
+function escapeHtml(s){
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ==================== 字體大小 ====================
+let fontScale = parseInt(localStorage.getItem("bsFontScale")) || 100;
+function applyFontScale(){
+  document.querySelectorAll(".verse").forEach(el => el.style.fontSize = (fontScale/100*1.08) + "em");
+  localStorage.setItem("bsFontScale", fontScale);
+}
+document.getElementById("fontMinus").onclick = () => { if(fontScale>70){fontScale-=10; applyFontScale();} };
+document.getElementById("fontPlus").onclick = () => { if(fontScale<160){fontScale+=10; applyFontScale();} };
+
+// ==================== 檢索範圍（經卷勾選） ====================
+let activeScope = "all";          // 目前生效的分類："all" | "ot" | "nt" | null（手動勾選、不完全對應任何分類時）
+let visibleScopeIds = BOOK_LIST.map(b => b.id); // 目前清單實際顯示的書卷id（依分類過濾）
+let searchScope = new Set(visibleScopeIds);     // 目前被勾選、納入檢索的書卷id
+
+function idsForMode(mode) {
+  if (mode === "ot") return BOOK_LIST.filter(b => b.ot).map(b => b.id);
+  if (mode === "nt") return BOOK_LIST.filter(b => !b.ot).map(b => b.id);
+  return BOOK_LIST.map(b => b.id); // "all"
+}
+
+function renderScopeList() {
+  const list = document.getElementById("scopeList");
+  list.innerHTML = "";
+  BOOK_LIST.forEach(b => {
+    if (!visibleScopeIds.includes(b.id)) return; // 過濾成只顯示目前分類的書卷
+    const item = document.createElement("div");
+    item.className = "scope-item";
+    const cbId = "scope_" + b.id;
+    item.innerHTML = `<input type="checkbox" id="${cbId}" ${searchScope.has(b.id) ? "checked" : ""}>
+      <label for="${cbId}">${b.id} <span class="en3">${b.en3}</span>${b.zh}</label>`;
+    item.querySelector("input").addEventListener("change", (e) => {
+      if (e.target.checked) searchScope.add(b.id); else searchScope.delete(b.id);
+      activeScope = null; // 手動改動後不再視為完全對應某個分類按鈕
+      updateScopeQuickBtnState();
+    });
+    list.appendChild(item);
+  });
+}
+
+function setScope(mode) {
+  const ids = idsForMode(mode);
+  if (activeScope === mode) {
+    // 再次點擊目前已生效的分類按鈕 → 清除該分類的勾選（清單維持顯示，但全部取消勾）
+    ids.forEach(id => searchScope.delete(id));
+    activeScope = null;
+  } else {
+    // 切到新分類 → 清單過濾成只顯示這個分類，且預設全選
+    visibleScopeIds = ids;
+    searchScope = new Set(ids);
+    activeScope = mode;
+  }
+  renderScopeList();
+  updateScopeQuickBtnState();
+}
+
+function updateScopeQuickBtnState() {
+  document.querySelectorAll(".scope-quickbtns button").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.scope === activeScope);
+  });
+}
+
+document.querySelectorAll(".scope-quickbtns button").forEach(btn => {
+  btn.onclick = () => setScope(btn.dataset.scope);
+});
+
+// ==================== 檢索 ====================
+// 簡化版邏輯解析：空格=AND，!開頭=NOT，中英文皆用 includes 比對
+function evaluateQuery(query, text) {
+  const terms = query.trim().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return false;
+  return terms.every(t => {
+    if (t.startsWith("!")) {
+      const neg = t.slice(1);
+      return neg ? !text.includes(neg) : true;
+    }
+    return text.includes(t);
+  });
+}
+
+function highlight(text, query) {
+  const terms = query.trim().split(/\s+/).filter(t => t && !t.startsWith("!"));
+  let out = escapeHtml(text);
+  terms.forEach(t => {
+    if (!t) return;
+    const esc = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    out = out.replace(new RegExp(esc, "g"), m => `<mark>${m}</mark>`);
+  });
+  return out;
+}
+
+function runSearch() {
+  const query = document.getElementById("searchInput").value.trim();
+  const listEl = document.getElementById("resultList");
+  const countEl = document.getElementById("resultCount");
+  if (!query) { listEl.innerHTML = ""; countEl.textContent = ""; return; }
+
+  let html = "";
+  let count = 0;
+  BOOK_LIST.forEach(meta => {
+    if (!searchScope.has(meta.id)) return;
+    const book = VERSES()[meta.id];
+    if (!book) return;
+    Object.keys(book.chapters).sort((a,b)=>+a-+b).forEach(ch => {
+      const chapterData = book.chapters[ch];
+      Object.keys(chapterData).sort((a,b)=>+a-+b).forEach(vn => {
+        const text = chapterData[vn];
+        if (!evaluateQuery(query, text)) return;
+        count++;
+        html += `<div class="result-item" data-book="${meta.id}" data-ch="${ch}">
+          <span class="result-ref">${meta.zh} ${ch}:${vn}</span>
+          <span class="result-text">${highlight(text, query)}</span>
+        </div>`;
+      });
+    });
+  });
+
+  countEl.textContent = `找到 ${count} 處`;
+  listEl.innerHTML = html || "<p style='color:#999;'>查無結果</p>";
+  listEl.querySelectorAll(".result-item").forEach(item => {
+    item.onclick = () => openChapter(item.dataset.book, item.dataset.ch);
+  });
+}
+document.getElementById("searchBtn").onclick = runSearch;
+document.getElementById("searchInput").addEventListener("keydown", e => { if (e.key === "Enter") runSearch(); });
+
+// ==================== 頁籤切換 ====================
+function switchView(name) {
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  document.getElementById(name).classList.add("active");
+  document.getElementById("tabBooks").classList.toggle("active", name !== "searchView");
+  document.getElementById("tabSearch").classList.toggle("active", name === "searchView");
+  if (name === "bookView") document.getElementById("headerTitle").textContent = "BSearch 查經";
+  if (name === "searchView") document.getElementById("headerTitle").textContent = "聖經檢索";
+}
+document.getElementById("tabBooks").onclick = () => switchView("bookView");
+document.getElementById("tabSearch").onclick = () => switchView("searchView");
+
+// ==================== 初始化 ====================
+renderVersionSelect();
+renderBookGrid();
+renderScopeList();
+updateScopeQuickBtnState();
+applyFontScale();
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>
