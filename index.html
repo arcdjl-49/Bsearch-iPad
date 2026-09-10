@@ -401,7 +401,8 @@ const EXTERNAL_LINKS = [
       const brf = FHL_BOOK_BRF[idx];
       if (!brf) return null;
       return `https://bible.fhl.net/NNUI/#/bible/${encodeURIComponent(brf)}${ch}:1`;
-    } }
+    } },
+  { label: "WP", build: (b, ch) => `https://www.wordproject.org/bibles/gb/${b.id}/${ch}.htm` }
 ];
 
 function renderExternalLinks(bookId, chapter) {
