@@ -402,7 +402,13 @@ const EXTERNAL_LINKS = [
       if (!brf) return null;
       return `https://bible.fhl.net/NNUI/#/bible/${encodeURIComponent(brf)}${ch}:1`;
     } },
-  { label: "WP", build: (b, ch) => `https://www.wordproject.org/bibles/gb/${b.id}/${ch}.htm` }
+  { label: "WP", build: (b, ch) => `https://www.wordproject.org/bibles/gb/${b.id}/${ch}.htm` },
+  { label: "多版", build: (b, ch) => {
+      const idx = parseInt(b.id, 10);
+      const brf = FHL_BOOK_BRF[idx];
+      if (!brf) return null;
+      return `https://bible.fhl.net/new/read.php?chineses=${encodeURIComponent(brf)}&strongflag=0&SSS=0&nodic=0&TAIU=0&maps=0&VERSION1=unv&VERSION5=wcb&VERSION16=esv&TABFLAG=1&nodic=0&chap=${ch}`;
+    } }
 ];
 
 function renderExternalLinks(bookId, chapter) {
