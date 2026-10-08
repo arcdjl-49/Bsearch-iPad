@@ -232,6 +232,7 @@
 <script src="data/wpCuvVerses.js"></script>
 <script src="data/wpNcvVerses.js"></script>
 <script src="data/wpKjvVerses.js"></script>
+<script src="data/wpCuvSimpVerses.js"></script>
 <script src="data/zhjUrls.js"></script>
 <script>
 // ==================== 書卷基礎資料 ====================
@@ -262,9 +263,10 @@ const BOOK_LIST = [
 
 // ==================== 版本設定 ====================
 const VERSIONS = [
-  { key: "cuv", label: "和合本 CUV", varName: "WPCUVVerses" },
-  { key: "ncv", label: "新譯本 NCV", varName: "WPNCVVerses" },
-  { key: "kjv", label: "KJV", varName: "WPKJVVerses" }
+  { key: "cuv",     label: "和合本（繁體）CUV", varName: "WPCUVVerses" },
+  { key: "cuvsimp", label: "和合本（简体）CUV", varName: "WPCUVSimpVerses" },
+  { key: "ncv",     label: "新譯本 NCV",         varName: "WPNCVVerses" },
+  { key: "kjv",     label: "KJV",                varName: "WPKJVVerses" },
 ];
 function getVersionData(key) {
   const v = VERSIONS.find(x => x.key === key);
@@ -401,13 +403,6 @@ const EXTERNAL_LINKS = [
       const brf = FHL_BOOK_BRF[idx];
       if (!brf) return null;
       return `https://bible.fhl.net/NNUI/#/bible/${encodeURIComponent(brf)}${ch}:1`;
-    } },
-  { label: "WP", build: (b, ch) => `https://www.wordproject.org/bibles/gb/${b.id}/${ch}.htm` },
-  { label: "多版", build: (b, ch) => {
-      const idx = parseInt(b.id, 10);
-      const brf = FHL_BOOK_BRF[idx];
-      if (!brf) return null;
-      return `https://bible.fhl.net/new/read.php?chineses=${encodeURIComponent(brf)}&strongflag=0&SSS=0&nodic=0&TAIU=0&maps=0&VERSION1=unv&VERSION5=wcb&VERSION16=esv&TABFLAG=1&nodic=0&chap=${ch}`;
     } }
 ];
 
