@@ -108,6 +108,7 @@
   .verse{display:block;margin-bottom:.55em;line-height:1.9;font-size:1.08em;}
   .verse .vn{color:var(--accent);font-weight:700;font-size:.78em;margin-right:.3em;vertical-align:1px;}
   .verse.hit{background:linear-gradient(transparent 12%,#fff3b0 12%,#fff3b0 88%,transparent 88%);}
+  .verse.selected{background:#eee2c8;border-radius:4px;}
   .chapnav{
     display:flex;justify-content:space-between;max-width:640px;margin:0 auto;padding:0 20px 30px;
   }
@@ -302,6 +303,7 @@ function renderVersionSelect() {
 }
 
 let current = { bookId: null, chapter: null };
+let currentVerse = "1";   // 目前選到的節號，預設第1節
 
 // ==================== 書卷選單 ====================
 function renderBookGrid() {
@@ -380,7 +382,9 @@ const FHL_BOOK_BRF = ["",
 const EXTERNAL_LINKS = [
   { label: "微讀", build: (b, ch) => `https://wdbible.app/bible/${b.en3.toLowerCase()}.${ch}.csbs?parallel=niv` },
   { label: "研讀", build: (b, ch) => `https://wd.bible/exegesis/cunps-cunps/${b.en3.toLowerCase()}.${ch}` },
-  { label: "對照", build: (b, ch) => `https://wd.bible/verse/${b.en3.toLowerCase()}.${ch}.1.cunps` },
+  
+  { label: "對照", build: (b, ch, vs) => `https://wd.bible/verse/${b.en3.toLowerCase()}.${ch}.${vs || 1}.cunps` },
+  
   { label: "YouV", build: (b, ch) => `https://www.bible.com/bible/111/${b.en3.toLowerCase()}.${ch}.NIV?parallel=1392` },
   { label: "NIrV", build: (b, ch) => `https://www.biblica.com/bible/nirv/${encodeURIComponent(b.en)}/${ch}/occbt/` },
   { label: "禱讀", build: (b, ch) => (typeof zhjBibleUrls !== "undefined" && zhjBibleUrls[b.id] && zhjBibleUrls[b.id][String(ch)]) || null },
@@ -406,13 +410,13 @@ const EXTERNAL_LINKS = [
     } }
 ];
 
-function renderExternalLinks(bookId, chapter) {
+function renderExternalLinks(bookId, chapter, verse) {
   const meta = BOOK_LIST.find(b => b.id === bookId);
   if (!meta) return "";
   let html = `<div class="ext-links"><span class="ext-label">網絡：</span>`;
   EXTERNAL_LINKS.forEach(link => {
-    const url = link.build(meta, chapter);
-    if (!url) return; // 對照表沒有這一章的資料就跳過，不顯示壞連結
+    const url = link.build(meta, chapter, verse);
+    if (!url) return;
     html += `<a class="ext-btn" href="${url}" target="_blank" rel="noopener noreferrer">${link.label}</a>`;
   });
   html += `</div>`;
@@ -422,13 +426,14 @@ function renderExternalLinks(bookId, chapter) {
 // ==================== 閱讀畫面 ====================
 function openChapter(bookId, chapter) {
   current = { bookId, chapter: String(chapter) };
+  currentVerse = "1"; // 每次開新的一章，重設為第1節
   const book = VERSES()[bookId];
   const meta = BOOK_LIST.find(b => b.id === bookId);
   const chapterData = book && book.chapters[current.chapter];
 
   const box = document.getElementById("readerContent");
   let html = `<h2>${meta.zh}</h2><div class="chnum">第 ${current.chapter} 章</div>`;
-  html += renderExternalLinks(bookId, current.chapter);
+  html += `<div id="extLinksBox">${renderExternalLinks(bookId, current.chapter, currentVerse)}</div>`;
   if (chapterData) {
     Object.keys(chapterData).sort((a,b)=>+a-+b).forEach(vn => {
       html += `<span class="verse" data-vn="${vn}"><span class="vn">${vn}</span>${escapeHtml(chapterData[vn])}</span>`;
@@ -438,12 +443,22 @@ function openChapter(bookId, chapter) {
   }
   box.innerHTML = html;
 
+  // 點某一節 → 記錄節號，並即時更新「對照」等連結的網址
+  box.querySelectorAll(".verse").forEach(el => {
+    el.addEventListener("click", () => {
+      box.querySelectorAll(".verse").forEach(v => v.classList.remove("selected"));
+      el.classList.add("selected");
+      currentVerse = el.dataset.vn;
+      document.getElementById("extLinksBox").innerHTML =
+        renderExternalLinks(current.bookId, current.chapter, currentVerse);
+    });
+  });
+
   document.getElementById("headerTitle").textContent = `${meta.zh} ${current.chapter}章`;
   updateChapNavButtons();
   switchView("readView");
   document.getElementById("main").querySelector("#readView").scrollTop = 0;
 }
-
 function updateChapNavButtons(){
   const book = VERSES()[current.bookId];
   const chapters = book ? Object.keys(book.chapters).map(Number).sort((a,b)=>a-b) : [];
