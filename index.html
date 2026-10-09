@@ -434,9 +434,9 @@ function renderExternalLinks(bookId, chapter, verse) {
 }
 
 // ==================== 閱讀畫面 ====================
-function openChapter(bookId, chapter) {
+function openChapter(bookId, chapter, targetVerse) {
   current = { bookId, chapter: String(chapter) };
-  currentVerse = "1"; // 每次開新的一章，重設為第1節
+  currentVerse = "1";
   const book = VERSES()[bookId];
   const meta = BOOK_LIST.find(b => b.id === bookId);
   const chapterData = book && book.chapters[current.chapter];
@@ -453,8 +453,7 @@ function openChapter(bookId, chapter) {
   }
   box.innerHTML = html;
 
-  // 點某一節 → 記錄節號，並即時更新「對照」等連結的網址
-  // 雙擊某一節 → 複製該節經文到剪貼簿，尾巴加上（卷名縮寫 章:節）
+  // 單擊：選取該節；雙擊：複製該節＋（卷名縮寫 章:節）
   box.querySelectorAll(".verse").forEach(el => {
     el.addEventListener("click", () => {
       box.querySelectorAll(".verse").forEach(v => v.classList.remove("selected"));
@@ -463,13 +462,11 @@ function openChapter(bookId, chapter) {
       document.getElementById("extLinksBox").innerHTML =
         renderExternalLinks(current.bookId, current.chapter, currentVerse);
     });
-
     el.addEventListener("dblclick", () => {
       const vn = el.dataset.vn;
       const text = chapterData[vn];
       if (!text) return;
-      const idx = parseInt(bookId, 10);
-      const abbr = FHL_BOOK_BRF[idx] || meta.zh;
+      const abbr = FHL_BOOK_BRF[parseInt(bookId, 10)] || meta.zh;
       const copyText = `${text}（${abbr} ${current.chapter}:${vn}）`;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(copyText).then(() => {
@@ -484,7 +481,20 @@ function openChapter(bookId, chapter) {
   updateChapNavButtons();
   switchView("readView");
   document.getElementById("main").querySelector("#readView").scrollTop = 0;
+
+  // 從檢索結果點進來：選取並捲動到指定節
+  if (targetVerse) {
+    const target = box.querySelector(`.verse[data-vn="${targetVerse}"]`);
+    if (target) {
+      target.classList.add("selected");
+      currentVerse = String(targetVerse);
+      document.getElementById("extLinksBox").innerHTML =
+        renderExternalLinks(current.bookId, current.chapter, currentVerse);
+      target.scrollIntoView({ block: "center" });
+    }
+  }
 }
+
 function updateChapNavButtons(){
   const book = VERSES()[current.bookId];
   const chapters = book ? Object.keys(book.chapters).map(Number).sort((a,b)=>a-b) : [];
@@ -607,7 +617,7 @@ function runSearch() {
         const text = chapterData[vn];
         if (!evaluateQuery(query, text)) return;
         count++;
-        html += `<div class="result-item" data-book="${meta.id}" data-ch="${ch}">
+        html += `<div class="result-item" data-book="${meta.id}" data-ch="${ch}" data-vn="${vn}">
           <span class="result-ref">${meta.zh} ${ch}:${vn}</span>
           <span class="result-text">${highlight(text, query)}</span>
         </div>`;
@@ -618,7 +628,7 @@ function runSearch() {
   countEl.textContent = `找到 ${count} 處`;
   listEl.innerHTML = html || "<p style='color:#999;'>查無結果</p>";
   listEl.querySelectorAll(".result-item").forEach(item => {
-    item.onclick = () => openChapter(item.dataset.book, item.dataset.ch);
+    item.onclick = () => openChapter(item.dataset.book, item.dataset.ch, item.dataset.vn);
   });
 }
 document.getElementById("searchBtn").onclick = runSearch;
