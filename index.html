@@ -705,7 +705,6 @@ function highlight(text, query) {
   if (!c.re) return escapeHtml(text);
   return text.split(c.re).map((s, i) => i % 2 ? `<mark>${escapeHtml(s)}</mark>` : escapeHtml(s)).join("");
 }
-
 function runSearch() {
   const query = document.getElementById("searchInput").value.trim();
   const listEl = document.getElementById("resultList");
@@ -714,30 +713,38 @@ function runSearch() {
 
   let html = "";
   let count = 0;
+  const perBook = []; // 各卷命中數，依經卷順序
   BOOK_LIST.forEach(meta => {
     if (!searchScope.has(meta.id)) return;
     const book = VERSES()[meta.id];
     if (!book) return;
+    let bookCount = 0;
     Object.keys(book.chapters).sort((a,b)=>+a-+b).forEach(ch => {
       const chapterData = book.chapters[ch];
       Object.keys(chapterData).sort((a,b)=>+a-+b).forEach(vn => {
         const text = chapterData[vn];
         if (!evaluateQuery(query, text)) return;
         count++;
+        bookCount++;
         html += `<div class="result-item" data-book="${meta.id}" data-ch="${ch}" data-vn="${vn}">
           <span class="result-ref">${meta.zh} ${ch}:${vn}</span>
           <span class="result-text">${highlight(text, query)}</span>
         </div>`;
       });
     });
+    if (bookCount) {
+      const abbr = FHL_BOOK_BRF[parseInt(meta.id, 10)] || meta.zh;
+      perBook.push(`${abbr} ${bookCount} 處`);
+    }
   });
 
-  countEl.textContent = `找到 ${count} 處`;
+  countEl.textContent = `找到 ${count} 處` + (perBook.length ? `（${perBook.join("；")}）` : "");
   listEl.innerHTML = html || "<p style='color:#999;'>查無結果</p>";
   listEl.querySelectorAll(".result-item").forEach(item => {
     item.onclick = () => openChapter(item.dataset.book, item.dataset.ch, item.dataset.vn);
   });
 }
+
 document.getElementById("searchBtn").onclick = runSearch;
 document.getElementById("searchInput").addEventListener("keydown", e => { if (e.key === "Enter") runSearch(); });
 
