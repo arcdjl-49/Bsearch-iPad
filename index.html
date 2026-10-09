@@ -215,7 +215,7 @@
       <input id="searchInput" placeholder="例如：耶穌 門徒 !彼得" enterkeyhint="search">
       <button id="searchBtn">檢索</button>
     </div>
-    <div class="search-hint">空格 = AND　！= NOT（例：!巴力 排除含巴力的經文）</div>
+    <div class="search-hint">空格＝且　|＝或　!＝非　( )＝分組（例：耶穌 (門徒|使徒) !法利賽）</div>
     <div class="result-count" id="resultCount"></div>
     <div id="resultList"></div>
   </div>
@@ -575,28 +575,135 @@ document.querySelectorAll(".scope-quickbtns button").forEach(btn => {
 });
 
 // ==================== 檢索 ====================
-// 簡化版邏輯解析：空格=AND，!開頭=NOT，中英文皆用 includes 比對
-function evaluateQuery(query, text) {
-  const terms = query.trim().split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return false;
-  return terms.every(t => {
-    if (t.startsWith("!")) {
-      const neg = t.slice(1);
-      return neg ? !text.includes(neg) : true;
-    }
-    return text.includes(t);
+// ==================== 檢索語法解析 ====================
+// 語法：空格＝且(AND)　|＝或(OR)　!＝非(NOT)　( )＝分組
+// 優先順序：括號 > ! > 空格(且) > |(或)
+// 全形/半形、中英文符號皆可：! ！　| ｜　( ) （ ）　空格 全形空格
+// 括號容錯：多出的「)」視為在整個查詢最前面補一個「(」；多出的「(」視為在最後補「)」；空括號忽略
+const Q_NOT = "!！﹗";
+const Q_OR  = "|｜│︱";
+const Q_LP  = "(（﹙";
+const Q_RP  = ")）﹚";
+
+function qTokenize(q) {
+  const toks = [];
+  const n = q.length;
+  const isStop = (c) => /\s/.test(c) || Q_LP.includes(c) || Q_RP.includes(c) || Q_OR.includes(c);
+  let i = 0;
+  while (i < n) {
+    const c = q[i];
+    if (/\s/.test(c)) { i++; continue; }
+    if (Q_LP.includes(c))  { toks.push({ t: "LP" });  i++; continue; }
+    if (Q_RP.includes(c))  { toks.push({ t: "RP" });  i++; continue; }
+    if (Q_OR.includes(c))  { toks.push({ t: "OR" });  i++; continue; }
+    if (Q_NOT.includes(c)) { toks.push({ t: "NOT" }); i++; continue; } // 只有出現在詞的開頭才算「非」，詞中間的 ! 視為普通字元
+    let j = i;
+    while (j < n && !isStop(q[j])) j++;
+    toks.push({ t: "TERM", v: q.slice(i, j).toLowerCase() });
+    i = j;
+  }
+  return toks;
+}
+
+function qRepairParens(toks) {
+  let depth = 0, missingOpen = 0;
+  toks.forEach(k => {
+    if (k.t === "LP") depth++;
+    else if (k.t === "RP") { if (depth > 0) depth--; else missingOpen++; }
   });
+  const out = [];
+  for (let i = 0; i < missingOpen; i++) out.push({ t: "LP" });
+  toks.forEach(k => out.push(k));
+  for (let i = 0; i < depth; i++) out.push({ t: "RP" });
+  return out;
+}
+
+function qParse(toks) {
+  let p = 0;
+  function parseOr() {
+    const parts = [];
+    const first = parseAnd();
+    if (first) parts.push(first);
+    while (p < toks.length && toks[p].t === "OR") {
+      p++;
+      const nxt = parseAnd();
+      if (nxt) parts.push(nxt);
+    }
+    if (!parts.length) return null;
+    return parts.length === 1 ? parts[0] : { op: "or", kids: parts };
+  }
+  function parseAnd() {
+    const kids = [];
+    while (p < toks.length && toks[p].t !== "OR" && toks[p].t !== "RP") {
+      const u = parseUnary();
+      if (u) kids.push(u);
+    }
+    if (!kids.length) return null;
+    return kids.length === 1 ? kids[0] : { op: "and", kids };
+  }
+  function parseUnary() {
+    const k = toks[p];
+    if (k.t === "NOT") {
+      p++;
+      if (p >= toks.length || toks[p].t === "OR" || toks[p].t === "RP") return null;
+      const u = parseUnary();
+      return u ? { op: "not", kid: u } : null;
+    }
+    if (k.t === "LP") {
+      p++;
+      const e = parseOr();
+      if (p < toks.length && toks[p].t === "RP") p++;
+      return e;
+    }
+    if (k.t === "TERM") { p++; return { op: "term", v: k.v }; }
+    p++; return null;
+  }
+  return parseOr();
+}
+
+function qEval(n, text) {
+  switch (n.op) {
+    case "term": return text.includes(n.v);
+    case "not":  return !qEval(n.kid, text);
+    case "and":  return n.kids.every(k => qEval(k, text));
+    case "or":   return n.kids.some(k => qEval(k, text));
+  }
+  return false;
+}
+
+function qCollectPositive(n, neg, out) {
+  if (n.op === "term") { if (!neg) out.push(n.v); }
+  else if (n.op === "not") qCollectPositive(n.kid, !neg, out);
+  else n.kids.forEach(k => qCollectPositive(k, neg, out));
+}
+
+let _qCache = { q: null, ast: null, re: null };
+function getParsedQuery(query) {
+  if (_qCache.q === query) return _qCache;
+  const ast = qParse(qRepairParens(qTokenize(query)));
+  let re = null;
+  if (ast) {
+    const terms = [];
+    qCollectPositive(ast, false, terms);
+    const uniq = Array.from(new Set(terms)).sort((a, b) => b.length - a.length);
+    if (uniq.length) {
+      re = new RegExp("(" + uniq.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")", "i");
+    }
+  }
+  _qCache = { q: query, ast, re };
+  return _qCache;
+}
+
+function evaluateQuery(query, text) {
+  const c = getParsedQuery(query);
+  if (!c.ast) return false;
+  return qEval(c.ast, text.toLowerCase());
 }
 
 function highlight(text, query) {
-  const terms = query.trim().split(/\s+/).filter(t => t && !t.startsWith("!"));
-  let out = escapeHtml(text);
-  terms.forEach(t => {
-    if (!t) return;
-    const esc = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    out = out.replace(new RegExp(esc, "g"), m => `<mark>${m}</mark>`);
-  });
-  return out;
+  const c = getParsedQuery(query);
+  if (!c.re) return escapeHtml(text);
+  return text.split(c.re).map((s, i) => i % 2 ? `<mark>${escapeHtml(s)}</mark>` : escapeHtml(s)).join("");
 }
 
 function runSearch() {
