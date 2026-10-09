@@ -109,6 +109,8 @@
   .verse .vn{color:var(--accent);font-weight:700;font-size:.78em;margin-right:.3em;vertical-align:1px;}
   .verse.hit{background:linear-gradient(transparent 12%,#fff3b0 12%,#fff3b0 88%,transparent 88%);}
   .verse.selected{background:#eee2c8;border-radius:4px;}
+  .verse.copied{background:#c8e6c9;}
+  
   .chapnav{
     display:flex;justify-content:space-between;max-width:640px;margin:0 auto;padding:0 20px 30px;
   }
@@ -407,6 +409,13 @@ const EXTERNAL_LINKS = [
       const brf = FHL_BOOK_BRF[idx];
       if (!brf) return null;
       return `https://bible.fhl.net/NNUI/#/bible/${encodeURIComponent(brf)}${ch}:1`;
+    } },
+  { label: "WP", build: (b, ch) => `https://www.wordproject.org/bibles/gb/${b.id}/${ch}.htm` },
+  { label: "多版", build: (b, ch) => {
+      const idx = parseInt(b.id, 10);
+      const brf = FHL_BOOK_BRF[idx];
+      if (!brf) return null;
+      return `https://bible.fhl.net/new/read.php?chineses=${encodeURIComponent(brf)}&strongflag=0&SSS=0&nodic=0&TAIU=0&maps=0&VERSION1=unv&VERSION5=wcb&VERSION16=esv&TABFLAG=1&nodic=0&chap=${ch}`;
     } }
 ];
 
@@ -444,6 +453,7 @@ function openChapter(bookId, chapter) {
   box.innerHTML = html;
 
   // 點某一節 → 記錄節號，並即時更新「對照」等連結的網址
+  // 雙擊某一節 → 複製該節經文到剪貼簿，尾巴加上（卷名縮寫 章:節）
   box.querySelectorAll(".verse").forEach(el => {
     el.addEventListener("click", () => {
       box.querySelectorAll(".verse").forEach(v => v.classList.remove("selected"));
@@ -451,6 +461,21 @@ function openChapter(bookId, chapter) {
       currentVerse = el.dataset.vn;
       document.getElementById("extLinksBox").innerHTML =
         renderExternalLinks(current.bookId, current.chapter, currentVerse);
+    });
+
+    el.addEventListener("dblclick", () => {
+      const vn = el.dataset.vn;
+      const text = chapterData[vn];
+      if (!text) return;
+      const idx = parseInt(bookId, 10);
+      const abbr = FHL_BOOK_BRF[idx] || meta.zh;
+      const copyText = `${text}（${abbr} ${current.chapter}:${vn}）`;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(copyText).then(() => {
+          el.classList.add("copied");
+          setTimeout(() => el.classList.remove("copied"), 400);
+        }).catch(() => {});
+      }
     });
   });
 
