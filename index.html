@@ -588,7 +588,7 @@ const Q_RP  = ")）﹚";
 function qTokenize(q) {
   const toks = [];
   const n = q.length;
-  const isStop = (c) => /\s/.test(c) || Q_LP.includes(c) || Q_RP.includes(c) || Q_OR.includes(c);
+  const isStop = (c) => /\s/.test(c) || Q_LP.includes(c) || Q_RP.includes(c) || Q_OR.includes(c) || Q_NOT.includes(c);
   let i = 0;
   while (i < n) {
     const c = q[i];
