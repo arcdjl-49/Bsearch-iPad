@@ -38,13 +38,17 @@
     gap:10px;
     flex-shrink:0;
   }
-  header h1{font-size:1.05em;margin:0;flex:1;font-weight:600;}
+  header h1{font-size:1.05em;margin:0;font-weight:600;white-space:nowrap;}
+  header h1 small{font-size:10px;font-weight:400;opacity:.7;margin-left:6px;}
+  .hdr-spacer{flex:1;}
   header button{
     background:rgba(255,255,255,.15);
     border:none;color:#fff;
     padding:8px 12px;border-radius:8px;
     font-size:.95em;
   }
+  header button.icon-btn{font-size:1.15em;padding:6px 10px;line-height:1.2;}
+  header button.active{background:rgba(255,255,255,.38);}
   header select{
     background:rgba(255,255,255,.15);
     border:none;color:#fff;
@@ -95,10 +99,15 @@
   .chapter-btn:active{background:var(--accent);color:#fff;}
 
   /* ---- 阅读画面 ---- */
-  #readView .reader{max-width:640px;margin:0 auto;padding:20px 20px 80px;}
-  #readView h2{font-size:1.3em;color:var(--brown-dark);margin:0 0 4px;}
-  #readView .chnum{color:#999;font-size:.9em;margin-bottom:18px;}
-  .ext-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:20px;}
+  #readView{overflow:hidden;}
+  #readView.active{display:flex;flex-direction:column;}
+  #readHead{flex-shrink:0;background:var(--cream);border-bottom:1px solid var(--line);}
+  #readHead .inner{max-width:640px;margin:0 auto;padding:12px 20px 10px;}
+  #readScroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  #readView .reader{max-width:640px;margin:0 auto;padding:16px 20px 24px;}
+  #readView h2{font-size:1.3em;color:var(--brown-dark);margin:0;display:inline;}
+  #readView .chnum{color:#999;font-size:.9em;display:inline;margin-left:10px;}
+  .ext-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;}
   .ext-label{font-size:.82em;color:#9a8b74;margin-right:2px;}
   .ext-btn{
     display:inline-block;padding:5px 12px;border:1px solid var(--line);border-radius:16px;
@@ -156,21 +165,15 @@
   .result-text{font-size:1em;line-height:1.7;}
   mark{background:#fff3b0;color:inherit;border-radius:2px;padding:0 1px;}
 
-  /* ---- 底部标签栏 ---- */
-  nav.tabbar{
-    display:flex;border-top:1px solid var(--line);background:#fff;
-    padding-bottom:env(safe-area-inset-bottom);flex-shrink:0;
-  }
-  nav.tabbar button{
-    flex:1;padding:12px 0 10px;background:none;border:none;color:#8a7f6e;font-size:.85em;font-weight:600;
-  }
-  nav.tabbar button.active{color:var(--accent);}
 </style>
 </head>
 <body>
 
 <header>
-  <h1 id="headerTitle">BSearch 查經</h1>
+  <h1 id="headerTitle">BSearch 查經<small id="appVer"></small></h1>
+  <button id="tabBooks" class="icon-btn active" aria-label="經卷" title="經卷">📖</button>
+  <span class="hdr-spacer"></span>
+  <button id="tabSearch" class="icon-btn" aria-label="檢索" title="檢索">🔍</button>
   <select id="versionSelect" aria-label="選擇版本"></select>
   <button id="fontMinus">A-</button>
   <button id="fontPlus">A+</button>
@@ -193,17 +196,20 @@
 
   <!-- 阅读画面 -->
   <div id="readView" class="view">
-    <div class="reader" id="readerContent"></div>
-    <div class="chapnav">
-      <button id="prevChap">← 上一章</button>
-      <button id="nextChap">下一章 →</button>
+    <div id="readHead"><div class="inner" id="readHeadInner"></div></div>
+    <div id="readScroll">
+      <div class="reader" id="readerContent"></div>
+      <div class="chapnav">
+        <button id="prevChap">← 上一章</button>
+        <button id="nextChap">下一章 →</button>
+      </div>
     </div>
   </div>
 
   <!-- 检索画面 -->
   <div id="searchView" class="view">
     <div class="scope-panel">
-      <div class="scope-title">2. 選擇經卷（預設全選）</div>
+      <div class="scope-title">聖經檢索 經卷選擇</div>
       <div class="scope-quickbtns">
         <button data-scope="all">全部</button>
         <button data-scope="ot">舊約 OT</button>
@@ -227,11 +233,6 @@
     <div class="chapter-grid" id="sheetChapters"></div>
   </div>
 </div>
-
-<nav class="tabbar">
-  <button id="tabBooks" class="active">📖 經卷</button>
-  <button id="tabSearch">🔍 檢索</button>
-</nav>
 
 <script src="data/wpCuvVerses.js"></script>
 <script src="data/wpNcvVerses.js"></script>
@@ -442,8 +443,10 @@ function openChapter(bookId, chapter, targetVerse) {
   const chapterData = book && book.chapters[current.chapter];
 
   const box = document.getElementById("readerContent");
-  let html = `<h2>${meta.zh}</h2><div class="chnum">第 ${current.chapter} 章</div>`;
-  html += `<div id="extLinksBox">${renderExternalLinks(bookId, current.chapter, currentVerse)}</div>`;
+  document.getElementById("readHeadInner").innerHTML =
+    `<h2>${meta.zh}</h2><span class="chnum">第 ${current.chapter} 章</span>` +
+    `<div id="extLinksBox">${renderExternalLinks(bookId, current.chapter, currentVerse)}</div>`;
+  let html = "";
   if (chapterData) {
     Object.keys(chapterData).sort((a,b)=>+a-+b).forEach(vn => {
       html += `<span class="verse" data-vn="${vn}"><span class="vn">${vn}</span>${escapeHtml(chapterData[vn])}</span>`;
@@ -477,10 +480,10 @@ function openChapter(bookId, chapter, targetVerse) {
     });
   });
 
-  document.getElementById("headerTitle").textContent = `${meta.zh} ${current.chapter}章`;
   updateChapNavButtons();
   switchView("readView");
-  document.getElementById("main").querySelector("#readView").scrollTop = 0;
+  applyFontScale();
+  document.getElementById("readScroll").scrollTop = 0;
 
   // 從檢索結果點進來：選取並捲動到指定節
   if (targetVerse) {
@@ -811,8 +814,6 @@ function switchView(name) {
   document.getElementById(name).classList.add("active");
   document.getElementById("tabBooks").classList.toggle("active", name !== "searchView");
   document.getElementById("tabSearch").classList.toggle("active", name === "searchView");
-  if (name === "bookView") document.getElementById("headerTitle").textContent = "BSearch 查經";
-  if (name === "searchView") document.getElementById("headerTitle").textContent = "聖經檢索";
 }
 document.getElementById("tabBooks").onclick = () => switchView("bookView");
 document.getElementById("tabSearch").onclick = () => switchView("searchView");
@@ -823,6 +824,20 @@ renderBookGrid();
 renderScopeList();
 updateScopeQuickBtnState();
 applyFontScale();
+
+// 顯示版本（取自 sw.js 的 CACHE_NAME，例如 bsearch-v12 → v12）
+(async function showVersion() {
+  const el = document.getElementById("appVer");
+  if (!el || !window.caches) return;
+  try {
+    const names = await caches.keys();
+    const num = s => { const m = s.match(/(\d+)\D*$/); return m ? +m[1] : -1; };
+    names.sort((a, b) => num(a) - num(b));
+    const n = names.pop() || "";
+    const m = n.match(/v\d[\w.]*$/i);
+    el.textContent = m ? m[0] : n;
+  } catch (e) {}
+})();
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
