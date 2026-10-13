@@ -579,11 +579,44 @@ document.querySelectorAll(".scope-quickbtns button").forEach(btn => {
 // 語法：空格＝且(AND)　|＝或(OR)　!＝非(NOT)　( )＝分組
 // 優先順序：括號 > ! > 空格(且) > |(或)
 // 全形/半形、中英文符號皆可：! ！　| ｜　( ) （ ）　空格 全形空格
+// 標點容錯：空白一律忽略；逗號類與引號/括號類標點可跳過（繁簡中英皆可）；
+//   。？！ . ? 視為句子邊界，不可跨越（但查詢裡可以寫 。或？ 來要求邊界）
+//   〔…〕（原文作…等小註）：可當作不存在（你們的心），也可當作存在（原文作我們）
 // 括號容錯：多出的「)」視為在整個查詢最前面補一個「(」；多出的「(」視為在最後補「)」；空括號忽略
 const Q_NOT = "!！﹗";
 const Q_OR  = "|｜│︱";
 const Q_LP  = "(（﹙";
 const Q_RP  = ")）﹚";
+const Q_SKIP = "、，,﹐﹑､;；﹔:：﹕．·・‧" + "「」『』“”‘’\"'（）()［］[]【】《》〈〉﹁﹂﹃﹄〔〕〖〗｛｝{}«»‹›﹙﹚" + "\u200B\u200C\u200D\uFEFF";
+const Q_BARRIER = "。｡.﹒？?﹖！!﹗";
+const Q_LATIN = /[0-9A-Za-z\u00C0-\u024F]/;
+const Q_SENT = "\uE000";
+
+function qNormalize(text, dropNotes, wantMap) {
+  let s = "";
+  const st = wantMap ? [] : null, en = wantMap ? [] : null;
+  const push = (str, a, b) => { s += str; if (wantMap) for (let k = 0; k < str.length; k++) { st.push(a); en.push(b); } };
+  let lastLatin = false, pendingSpace = false, pendSt = 0, i = 0;
+  const n = text.length;
+  while (i < n) {
+    const ch = String.fromCodePoint(text.codePointAt(i));
+    const len = ch.length;
+    if (dropNotes && ch === "〔") {
+      const e = text.indexOf("〕", i + 1);
+      if (e >= 0) { i = e + 1; continue; }
+    }
+    if (/\s/.test(ch)) { if (lastLatin && !pendingSpace) { pendingSpace = true; pendSt = i; } i += len; continue; }
+    if (Q_SKIP.includes(ch)) { i += len; continue; }
+    if (Q_BARRIER.includes(ch)) { push(Q_SENT, i, i + len); lastLatin = false; pendingSpace = false; i += len; continue; }
+    const isLatin = Q_LATIN.test(ch);
+    if (pendingSpace && isLatin) push(" ", pendSt, pendSt + 1);
+    pendingSpace = false;
+    push(ch.toLowerCase(), i, i + len);
+    lastLatin = isLatin;
+    i += len;
+  }
+  return wantMap ? { s, st, en } : s;
+}
 
 function qTokenize(q) {
   const toks = [];
@@ -596,10 +629,11 @@ function qTokenize(q) {
     if (Q_LP.includes(c))  { toks.push({ t: "LP" });  i++; continue; }
     if (Q_RP.includes(c))  { toks.push({ t: "RP" });  i++; continue; }
     if (Q_OR.includes(c))  { toks.push({ t: "OR" });  i++; continue; }
-    if (Q_NOT.includes(c)) { toks.push({ t: "NOT" }); i++; continue; } // 只有出現在詞的開頭才算「非」，詞中間的 ! 視為普通字元
+    if (Q_NOT.includes(c)) { toks.push({ t: "NOT" }); i++; continue; }
     let j = i;
     while (j < n && !isStop(q[j])) j++;
-    toks.push({ t: "TERM", v: q.slice(i, j).toLowerCase() });
+    const v = qNormalize(q.slice(i, j), false, false);
+    if (v.replace(/\uE000/g, "") !== "") toks.push({ t: "TERM", v });
     i = j;
   }
   return toks;
@@ -661,12 +695,12 @@ function qParse(toks) {
   return parseOr();
 }
 
-function qEval(n, text) {
+function qEval(n, A, B) {
   switch (n.op) {
-    case "term": return text.includes(n.v);
-    case "not":  return !qEval(n.kid, text);
-    case "and":  return n.kids.every(k => qEval(k, text));
-    case "or":   return n.kids.some(k => qEval(k, text));
+    case "term": return A.includes(n.v) || (B !== A && B.includes(n.v));
+    case "not":  return !qEval(n.kid, A, B);
+    case "and":  return n.kids.every(k => qEval(k, A, B));
+    case "or":   return n.kids.some(k => qEval(k, A, B));
   }
   return false;
 }
@@ -677,33 +711,56 @@ function qCollectPositive(n, neg, out) {
   else n.kids.forEach(k => qCollectPositive(k, neg, out));
 }
 
-let _qCache = { q: null, ast: null, re: null };
+let _qCache = { q: null, ast: null, terms: [] };
 function getParsedQuery(query) {
   if (_qCache.q === query) return _qCache;
   const ast = qParse(qRepairParens(qTokenize(query)));
-  let re = null;
+  let terms = [];
   if (ast) {
-    const terms = [];
     qCollectPositive(ast, false, terms);
-    const uniq = Array.from(new Set(terms)).sort((a, b) => b.length - a.length);
-    if (uniq.length) {
-      re = new RegExp("(" + uniq.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")", "i");
-    }
+    terms = Array.from(new Set(terms)).sort((a, b) => b.length - a.length);
   }
-  _qCache = { q: query, ast, re };
+  _qCache = { q: query, ast, terms };
   return _qCache;
 }
 
 function evaluateQuery(query, text) {
   const c = getParsedQuery(query);
   if (!c.ast) return false;
-  return qEval(c.ast, text.toLowerCase());
+  const A = qNormalize(text, true, false);
+  const B = text.includes("〔") ? qNormalize(text, false, false) : A;
+  return qEval(c.ast, A, B);
 }
 
 function highlight(text, query) {
   const c = getParsedQuery(query);
-  if (!c.re) return escapeHtml(text);
-  return text.split(c.re).map((s, i) => i % 2 ? `<mark>${escapeHtml(s)}</mark>` : escapeHtml(s)).join("");
+  if (!c.terms.length) return escapeHtml(text);
+  const maps = [qNormalize(text, true, true)];
+  if (text.includes("〔")) maps.push(qNormalize(text, false, true));
+  const ranges = [];
+  maps.forEach(m => {
+    c.terms.forEach(t => {
+      let idx = m.s.indexOf(t);
+      while (idx >= 0) {
+        ranges.push([m.st[idx], m.en[idx + t.length - 1]]);
+        idx = m.s.indexOf(t, idx + 1);
+      }
+    });
+  });
+  if (!ranges.length) return escapeHtml(text);
+  ranges.sort((x, y) => x[0] - y[0] || y[1] - x[1]);
+  const merged = [];
+  ranges.forEach(r => {
+    const last = merged[merged.length - 1];
+    if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+    else merged.push([r[0], r[1]]);
+  });
+  let out = "", pos = 0;
+  merged.forEach(([a, b]) => {
+    out += escapeHtml(text.slice(pos, a)) + "<mark>" + escapeHtml(text.slice(a, b)) + "</mark>";
+    pos = b;
+  });
+  return out + escapeHtml(text.slice(pos));
 }
 function runSearch() {
   const query = document.getElementById("searchInput").value.trim();
