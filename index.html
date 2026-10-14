@@ -221,7 +221,7 @@
       <input id="searchInput" placeholder="例如：耶穌 門徒 !彼得" enterkeyhint="search">
       <button id="searchBtn">檢索</button>
     </div>
-    <div class="search-hint">空格＝且　|＝或　!＝非　( )＝分組（例：耶穌 (門徒|使徒) !法利賽）</div>
+    <div class="search-hint">空格＝且　|＝或　!＝非　( )＝分組（例：耶穌 (門徒|使徒) !法利賽）　英文整字比對；詞首／詞尾加 * 不限整字（love*、*man）</div>
     <div class="result-count" id="resultCount"></div>
     <div id="resultList"></div>
   </div>
@@ -272,8 +272,8 @@ const VERSIONS = [
   { key: "cuv",     label: "和合本（繁體）CUV", varName: "WPCUVVerses" },
   { key: "cuvsimp", label: "和合本（简体）CUV", varName: "WPCUVSimpVerses" },
   { key: "ncv",     label: "新譯本 NCV",         varName: "WPNCVVerses" },
-  { key: "kjv",     label: "KJV",                varName: "WPKJVVerses" },
-  { key: "esv",     label: "ESV",                varName: "WPESVVerses" },
+  { key: "kjv",     label: "KJV",                varName: "WPKJVVerses", en: true },
+  { key: "esv",     label: "ESV",                varName: "WPESVVerses", en: true },
 ];
 function getVersionData(key) {
   const v = VERSIONS.find(x => x.key === key);
@@ -285,6 +285,7 @@ let currentVersionKey = localStorage.getItem("bsVersion") || VERSIONS[0].key;
 if (!VERSIONS.some(v => v.key === currentVersionKey)) currentVersionKey = VERSIONS[0].key;
 
 function VERSES() { return getVersionData(currentVersionKey); }
+function isEnglishVersion() { const v = VERSIONS.find(x => x.key === currentVersionKey); return !!(v && v.en); }
 
 function renderVersionSelect() {
   const sel = document.getElementById("versionSelect");
@@ -587,16 +588,21 @@ document.querySelectorAll(".scope-quickbtns button").forEach(btn => {
 // 標點容錯：空白一律忽略；逗號類與引號/括號類標點可跳過（繁簡中英皆可）；
 //   。？！ . ? 視為句子邊界，不可跨越（但查詢裡可以寫 。或？ 來要求邊界）
 //   〔…〕（原文作…等小註）：可當作不存在（你們的心），也可當作存在（原文作我們）
+// 英文單字：預設整字比對（man 不會命中 woman、God 不會命中 Godly）；詞前/後加 * 表示不限整字（love* → loved、*man → woman）
 // 括號容錯：多出的「)」視為在整個查詢最前面補一個「(」；多出的「(」視為在最後補「)」；空括號忽略
 const Q_NOT = "!！﹗";
 const Q_OR  = "|｜│︱";
 const Q_LP  = "(（﹙";
 const Q_RP  = ")）﹚";
+
 const Q_SKIP = "、，,﹐﹑､;；﹔:：﹕．·・‧" + "「」『』“”‘’\"'（）()［］[]【】《》〈〉﹁﹂﹃﹄〔〕〖〗｛｝{}«»‹›﹙﹚" + "\u200B\u200C\u200D\uFEFF";
 const Q_BARRIER = "。｡.﹒？?﹖！!﹗";
 const Q_LATIN = /[0-9A-Za-z\u00C0-\u024F]/;
 const Q_SENT = "\uE000";
 
+// 正規化：去空白、跳過標點、邊界統一成 Q_SENT、轉小寫。
+// dropNotes=true：〔…〕連內容一起拿掉；false：只跳過括號本身。
+// wantMap=true：同時回傳每個輸出字元對應原文的起訖位置（供標示用）
 function qNormalize(text, dropNotes, wantMap) {
   let s = "";
   const st = wantMap ? [] : null, en = wantMap ? [] : null;
@@ -611,10 +617,10 @@ function qNormalize(text, dropNotes, wantMap) {
       if (e >= 0) { i = e + 1; continue; }
     }
     if (/\s/.test(ch)) { if (lastLatin && !pendingSpace) { pendingSpace = true; pendSt = i; } i += len; continue; }
-    if (Q_SKIP.includes(ch)) { i += len; continue; }
+    if (Q_SKIP.includes(ch)) { if (lastLatin && !pendingSpace) { pendingSpace = true; pendSt = i; } i += len; continue; }
     if (Q_BARRIER.includes(ch)) { push(Q_SENT, i, i + len); lastLatin = false; pendingSpace = false; i += len; continue; }
     const isLatin = Q_LATIN.test(ch);
-    if (pendingSpace && isLatin) push(" ", pendSt, pendSt + 1);
+    if (pendingSpace && isLatin) push(" ", pendSt, pendSt + 1); // 英文單字之間的空格保留
     pendingSpace = false;
     push(ch.toLowerCase(), i, i + len);
     lastLatin = isLatin;
@@ -634,11 +640,13 @@ function qTokenize(q) {
     if (Q_LP.includes(c))  { toks.push({ t: "LP" });  i++; continue; }
     if (Q_RP.includes(c))  { toks.push({ t: "RP" });  i++; continue; }
     if (Q_OR.includes(c))  { toks.push({ t: "OR" });  i++; continue; }
-    if (Q_NOT.includes(c)) { toks.push({ t: "NOT" }); i++; continue; }
+    if (Q_NOT.includes(c)) { toks.push({ t: "NOT" }); i++; continue; } // ! 不論前面有沒有空格，都是「非」
     let j = i;
     while (j < n && !isStop(q[j])) j++;
-    const v = qNormalize(q.slice(i, j), false, false);
-    if (v.replace(/\uE000/g, "") !== "") toks.push({ t: "TERM", v });
+    const raw = q.slice(i, j);
+    const wl = /^[*＊]/.test(raw), wr = /[*＊]$/.test(raw);   // 詞首/詞尾的 * ＝ 不限整字
+    const v = qNormalize(raw.replace(/[*＊]/g, ""), false, false);
+    if (v.replace(/\uE000/g, "") !== "") toks.push({ t: "TERM", v, wl, wr }); // 只剩標點的詞丟掉
     i = j;
   }
   return toks;
@@ -694,15 +702,30 @@ function qParse(toks) {
       if (p < toks.length && toks[p].t === "RP") p++;
       return e;
     }
-    if (k.t === "TERM") { p++; return { op: "term", v: k.v }; }
+    if (k.t === "TERM") { p++; return { op: "term", v: k.v, wl: k.wl, wr: k.wr }; }
     p++; return null;
   }
   return parseOr();
 }
 
+// 在正規化後的文字 s 裡找詞 t 的位置；英文字母開頭/結尾的詞要求整字邊界（除非加了 *）
+function qFindAll(s, t, firstOnly) {
+  const v = t.v, res = [];
+  const needL = !t.wl && Q_LATIN.test(v[0]);
+  const needR = !t.wr && Q_LATIN.test(v[v.length - 1]);
+  let i = s.indexOf(v);
+  while (i >= 0) {
+    const okL = !needL || i === 0 || !Q_LATIN.test(s[i - 1]);
+    const okR = !needR || i + v.length >= s.length || !Q_LATIN.test(s[i + v.length]);
+    if (okL && okR) { res.push(i); if (firstOnly) return res; }
+    i = s.indexOf(v, i + 1);
+  }
+  return res;
+}
+
 function qEval(n, A, B) {
   switch (n.op) {
-    case "term": return A.includes(n.v) || (B !== A && B.includes(n.v));
+    case "term": return qFindAll(A, n, true).length > 0 || (B !== A && qFindAll(B, n, true).length > 0);
     case "not":  return !qEval(n.kid, A, B);
     case "and":  return n.kids.every(k => qEval(k, A, B));
     case "or":   return n.kids.some(k => qEval(k, A, B));
@@ -711,7 +734,7 @@ function qEval(n, A, B) {
 }
 
 function qCollectPositive(n, neg, out) {
-  if (n.op === "term") { if (!neg) out.push(n.v); }
+  if (n.op === "term") { if (!neg) out.push(n); }
   else if (n.op === "not") qCollectPositive(n.kid, !neg, out);
   else n.kids.forEach(k => qCollectPositive(k, neg, out));
 }
@@ -723,7 +746,9 @@ function getParsedQuery(query) {
   let terms = [];
   if (ast) {
     qCollectPositive(ast, false, terms);
-    terms = Array.from(new Set(terms)).sort((a, b) => b.length - a.length);
+    const seen = new Set();
+    terms = terms.filter(t => { const k = t.v + "|" + t.wl + "|" + t.wr; if (seen.has(k)) return false; seen.add(k); return true; })
+                 .sort((a, b) => b.v.length - a.v.length);
   }
   _qCache = { q: query, ast, terms };
   return _qCache;
@@ -745,11 +770,7 @@ function highlight(text, query) {
   const ranges = [];
   maps.forEach(m => {
     c.terms.forEach(t => {
-      let idx = m.s.indexOf(t);
-      while (idx >= 0) {
-        ranges.push([m.st[idx], m.en[idx + t.length - 1]]);
-        idx = m.s.indexOf(t, idx + 1);
-      }
+      qFindAll(m.s, t, false).forEach(idx => ranges.push([m.st[idx], m.en[idx + t.v.length - 1]]));
     });
   });
   if (!ranges.length) return escapeHtml(text);
@@ -776,6 +797,7 @@ function runSearch() {
   let html = "";
   let count = 0;
   const perBook = []; // 各卷命中數，依經卷順序
+  const en = isEnglishVersion(); // 英文版本：卷名與縮寫顯示英文
   BOOK_LIST.forEach(meta => {
     if (!searchScope.has(meta.id)) return;
     const book = VERSES()[meta.id];
@@ -789,13 +811,13 @@ function runSearch() {
         count++;
         bookCount++;
         html += `<div class="result-item" data-book="${meta.id}" data-ch="${ch}" data-vn="${vn}">
-          <span class="result-ref">${meta.zh} ${ch}:${vn}</span>
+          <span class="result-ref">${en ? meta.en : meta.zh} ${ch}:${vn}</span>
           <span class="result-text">${highlight(text, query)}</span>
         </div>`;
       });
     });
     if (bookCount) {
-      const abbr = FHL_BOOK_BRF[parseInt(meta.id, 10)] || meta.zh;
+      const abbr = en ? meta.en3 : (FHL_BOOK_BRF[parseInt(meta.id, 10)] || meta.zh);
       perBook.push(`${abbr} ${bookCount} 處`);
     }
   });
