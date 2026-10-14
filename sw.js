@@ -1,5 +1,5 @@
 // BSearch iPad 版 Service Worker —— 快取 App 骨架 + 經文索引，讓離線也能讀經/檢索
-const CACHE_NAME = "bsearch-ipad-v14";
+const CACHE_NAME = "bsearch-ipad-v15";
 const ASSETS = [
   "./index.html",
   "./manifest.json",
@@ -7,6 +7,7 @@ const ASSETS = [
   "./data/wpCuvSimpVerses.js",
   "./data/wpNcvVerses.js",
   "./data/wpKjvVerses.js",
+  "./data/wpEsvVerses.js",
   "./data/zhjUrls.js",
 ];
 

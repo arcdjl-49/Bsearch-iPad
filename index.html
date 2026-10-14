@@ -237,6 +237,7 @@
 <script src="data/wpCuvVerses.js"></script>
 <script src="data/wpNcvVerses.js"></script>
 <script src="data/wpKjvVerses.js"></script>
+<script src="data/wpEsvVerses.js"></script>
 <script src="data/wpCuvSimpVerses.js"></script>
 <script src="data/zhjUrls.js"></script>
 <script>
@@ -272,6 +273,7 @@ const VERSIONS = [
   { key: "cuvsimp", label: "和合本（简体）CUV", varName: "WPCUVSimpVerses" },
   { key: "ncv",     label: "新譯本 NCV",         varName: "WPNCVVerses" },
   { key: "kjv",     label: "KJV",                varName: "WPKJVVerses" },
+  { key: "esv",     label: "ESV",                varName: "WPESVVerses" },
 ];
 function getVersionData(key) {
   const v = VERSIONS.find(x => x.key === key);
