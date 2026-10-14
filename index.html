@@ -221,7 +221,7 @@
       <input id="searchInput" placeholder="例如：耶穌 門徒 !彼得" enterkeyhint="search">
       <button id="searchBtn">檢索</button>
     </div>
-    <div class="search-hint">空格＝且　|＝或　!＝非　( )＝分組（例：耶穌 (門徒|使徒) !法利賽）　英文整字比對；詞首／詞尾加 * 不限整字（love*、*man）</div>
+    <div class="search-hint" id="searchHint">空格＝且　|＝或　!＝非　( )＝分組（例：耶穌 (門徒|使徒) !法利賽）　英文整字比對；詞首／詞尾加 * 不限整字（love*、*man）</div>
     <div class="result-count" id="resultCount"></div>
     <div id="resultList"></div>
   </div>
@@ -287,6 +287,24 @@ if (!VERSIONS.some(v => v.key === currentVersionKey)) currentVersionKey = VERSIO
 function VERSES() { return getVersionData(currentVersionKey); }
 function isEnglishVersion() { const v = VERSIONS.find(x => x.key === currentVersionKey); return !!(v && v.en); }
 
+function updateSearchLang() {
+  const en = isEnglishVersion();
+  const hint = document.getElementById("searchHint");
+  if (hint) {
+    if (hint.dataset.zh === undefined) hint.dataset.zh = hint.textContent;
+    hint.textContent = en
+      ? "Space = AND　| = OR　! = NOT　( ) = Group　* = Wildcard (e.g. jesus(*postles|disciple*)!Pharisees)"
+      : hint.dataset.zh;
+  }
+  const btn = document.getElementById("searchBtn");
+  if (btn) btn.textContent = en ? "Search" : "檢索";
+  const inp = document.getElementById("searchInput");
+  if (inp) {
+    if (inp.dataset.ph === undefined) inp.dataset.ph = inp.placeholder;
+    inp.placeholder = en ? "e.g. Jesus disciple !Peter" : inp.dataset.ph;
+  }
+}
+
 function renderVersionSelect() {
   const sel = document.getElementById("versionSelect");
   sel.innerHTML = "";
@@ -297,9 +315,11 @@ function renderVersionSelect() {
     sel.appendChild(opt);
   });
   sel.value = currentVersionKey;
+  updateSearchLang();
   sel.onchange = () => {
     currentVersionKey = sel.value;
     localStorage.setItem("bsVersion", currentVersionKey);
+    updateSearchLang();
     // 如果正在閱讀畫面，切版本後嘗試停在同一書卷/章節重新渲染
     if (current.bookId && document.getElementById("readView").classList.contains("active")) {
       openChapter(current.bookId, current.chapter);
@@ -818,12 +838,14 @@ function runSearch() {
     });
     if (bookCount) {
       const abbr = en ? meta.en3 : (FHL_BOOK_BRF[parseInt(meta.id, 10)] || meta.zh);
-      perBook.push(`${abbr} ${bookCount} 處`);
+      perBook.push(en ? `${abbr} ${bookCount}` : `${abbr} ${bookCount} 處`);
     }
   });
 
-  countEl.textContent = `找到 ${count} 處` + (perBook.length ? `（${perBook.join("；")}）` : "");
-  listEl.innerHTML = html || "<p style='color:#999;'>查無結果</p>";
+  countEl.textContent = en
+    ? `${count} found` + (perBook.length ? ` (${perBook.join("; ")})` : "")
+    : `找到 ${count} 處` + (perBook.length ? `（${perBook.join("；")}）` : "");
+  listEl.innerHTML = html || `<p style='color:#999;'>${en ? "No results" : "查無結果"}</p>`;
   listEl.querySelectorAll(".result-item").forEach(item => {
     item.onclick = () => openChapter(item.dataset.book, item.dataset.ch, item.dataset.vn);
   });
