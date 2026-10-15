@@ -302,7 +302,7 @@ function updateSearchLang() {
     st.textContent = en ? "Select Books to Query" : st.dataset.zh;
   }
   const btn = document.getElementById("searchBtn");
-  if (btn) btn.textContent = en ? "Search" : "檢索";
+  if (btn) btn.textContent = en ? "Query" : "檢索";
   const inp = document.getElementById("searchInput");
   if (inp) {
     if (inp.dataset.ph === undefined) inp.dataset.ph = inp.placeholder;
