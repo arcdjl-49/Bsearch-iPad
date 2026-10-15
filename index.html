@@ -221,7 +221,7 @@
       <input id="searchInput" placeholder="例如：耶穌 門徒 !彼得" enterkeyhint="search">
       <button id="searchBtn">檢索</button>
     </div>
-    <div class="search-hint" id="searchHint">空格＝且　|＝或　!＝非　( )＝分組（例：耶穌 (門徒|使徒) !法利賽）　英文整字比對；詞首／詞尾加 * 不限整字（love*、*man）</div>
+    <div class="search-hint" id="searchHint">空格＝且　|＝或　!＝非　( )＝分組（例：耶穌 (門徒|使徒) !法利賽）</div>
     <div class="result-count" id="resultCount"></div>
     <div id="resultList"></div>
   </div>
@@ -447,7 +447,7 @@ const EXTERNAL_LINKS = [
 function renderExternalLinks(bookId, chapter, verse) {
   const meta = BOOK_LIST.find(b => b.id === bookId);
   if (!meta) return "";
-  let html = `<div class="ext-links"><span class="ext-label">網絡：</span>`;
+  let html = `<div class="ext-links"><span class="ext-label">網頁：</span>`;
   EXTERNAL_LINKS.forEach(link => {
     const url = link.build(meta, chapter, verse);
     if (!url) return;
@@ -838,13 +838,13 @@ function runSearch() {
     });
     if (bookCount) {
       const abbr = en ? meta.en3 : (FHL_BOOK_BRF[parseInt(meta.id, 10)] || meta.zh);
-      perBook.push(en ? `${abbr} ${bookCount}` : `${abbr} ${bookCount} 處`);
+      perBook.push(en ? `${abbr} ${bookCount}` : `${abbr} ${bookCount}`);
     }
   });
 
   countEl.textContent = en
-    ? `${count} found` + (perBook.length ? ` (${perBook.join("; ")})` : "")
-    : `找到 ${count} 處` + (perBook.length ? `（${perBook.join("；")}）` : "");
+    ? `Verse ${count} found` + (perBook.length ? ` (${perBook.join("; ")})` : "")
+    : `找到 ${count} ` + (perBook.length ? `（${perBook.join("；")}）節經文` : "");
   listEl.innerHTML = html || `<p style='color:#999;'>${en ? "No results" : "查無結果"}</p>`;
   listEl.querySelectorAll(".result-item").forEach(item => {
     item.onclick = () => openChapter(item.dataset.book, item.dataset.ch, item.dataset.vn);
