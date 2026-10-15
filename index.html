@@ -184,11 +184,11 @@
   <div id="bookView" class="view active">
     <div class="testament-cols">
       <div>
-        <div class="testament-title">舊約 Old Testament</div>
+        <div class="testament-title">Old Testament 舊約</div>
         <div class="book-grid" id="otGrid"></div>
       </div>
       <div>
-        <div class="testament-title">新約 New Testament</div>
+        <div class="testament-title">New Testament 新約</div>
         <div class="book-grid" id="ntGrid"></div>
       </div>
     </div>
@@ -209,19 +209,19 @@
   <!-- 检索画面 -->
   <div id="searchView" class="view">
     <div class="scope-panel">
-      <div class="scope-title">聖經檢索 經卷選擇</div>
+      <div class="scope-title" id="scopeTitle">聖經檢索 經卷選擇</div>
       <div class="scope-quickbtns">
-        <button data-scope="all">全部</button>
-        <button data-scope="ot">舊約 OT</button>
-        <button data-scope="nt">新約 NT</button>
+        <button data-scope="all">ALL</button>
+        <button data-scope="ot">OT 舊約</button>
+        <button data-scope="nt">NT 新約</button>
       </div>
       <div class="scope-list" id="scopeList"></div>
     </div>
     <div class="search-bar">
-      <input id="searchInput" placeholder="例如：耶穌 門徒 !彼得" enterkeyhint="search">
+      <input id="searchInput" placeholder="例如：耶穌 (門徒|使徒) !法利賽" enterkeyhint="search">
       <button id="searchBtn">檢索</button>
     </div>
-    <div class="search-hint" id="searchHint">空格＝且　|＝或　!＝非　( )＝分組（例：耶穌 (門徒|使徒) !法利賽）</div>
+    <div class="search-hint" id="searchHint">空格＝且　|＝或　!＝非　( )＝分組</div>
     <div class="result-count" id="resultCount"></div>
     <div id="resultList"></div>
   </div>
@@ -293,15 +293,20 @@ function updateSearchLang() {
   if (hint) {
     if (hint.dataset.zh === undefined) hint.dataset.zh = hint.textContent;
     hint.textContent = en
-      ? "Space = AND　| = OR　! = NOT　( ) = Group　* = Wildcard (e.g. jesus(*postles|disciple*)!Pharisees)"
+      ? "Space = AND　| = OR　! = NOT　( ) = Group　* = Wildcard"
       : hint.dataset.zh;
+  }
+  const st = document.getElementById("scopeTitle");
+  if (st) {
+    if (st.dataset.zh === undefined) st.dataset.zh = st.textContent;
+    st.textContent = en ? "Select Books to Query" : st.dataset.zh;
   }
   const btn = document.getElementById("searchBtn");
   if (btn) btn.textContent = en ? "Search" : "檢索";
   const inp = document.getElementById("searchInput");
   if (inp) {
     if (inp.dataset.ph === undefined) inp.dataset.ph = inp.placeholder;
-    inp.placeholder = en ? "e.g. Jesus disciple !Peter" : inp.dataset.ph;
+    inp.placeholder = en ? "e.g. jesus(*postles|disciple*)!Pharisees)" : inp.dataset.ph;
   }
 }
 
@@ -843,7 +848,7 @@ function runSearch() {
   });
 
   countEl.textContent = en
-    ? `Verse ${count} found` + (perBook.length ? ` (${perBook.join("; ")})` : "")
+    ? `Verses ${count} found` + (perBook.length ? ` (${perBook.join("; ")})` : "")
     : `找到 ${count} ` + (perBook.length ? `（${perBook.join("；")}）節經文` : "");
   listEl.innerHTML = html || `<p style='color:#999;'>${en ? "No results" : "查無結果"}</p>`;
   listEl.querySelectorAll(".result-item").forEach(item => {
