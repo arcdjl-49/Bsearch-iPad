@@ -302,7 +302,7 @@ function updateSearchLang() {
     st.textContent = en ? "Select Books to Query" : st.dataset.zh;
   }
   const btn = document.getElementById("searchBtn");
-  if (btn) btn.textContent = en ? "Query" : "檢索";
+  if (btn) btn.textContent = en ? "Search" : "檢索";
   const inp = document.getElementById("searchInput");
   if (inp) {
     if (inp.dataset.ph === undefined) inp.dataset.ph = inp.placeholder;
@@ -748,11 +748,29 @@ function qFindAll(s, t, firstOnly) {
   return res;
 }
 
+// 不重疊出現次數（同一個詞在「且」裡重複寫 N 次 → 要求至少出現 N 處）
+function qCountAll(s, t) {
+  let c = 0, end = -1;
+  qFindAll(s, t, false).forEach(i => { if (i >= end) { c++; end = i + t.v.length; } });
+  return c;
+}
+
 function qEval(n, A, B) {
   switch (n.op) {
     case "term": return qFindAll(A, n, true).length > 0 || (B !== A && qFindAll(B, n, true).length > 0);
     case "not":  return !qEval(n.kid, A, B);
-    case "and":  return n.kids.every(k => qEval(k, A, B));
+    case "and": {
+      const key = k => k.v + "|" + k.wl + "|" + k.wr;
+      const need = {};
+      n.kids.forEach(k => { if (k.op === "term") need[key(k)] = (need[key(k)] || 0) + 1; });
+      return n.kids.every(k => {
+        if (k.op === "term" && need[key(k)] > 1) {
+          const c = need[key(k)];
+          return qCountAll(A, k) >= c || (B !== A && qCountAll(B, k) >= c);
+        }
+        return qEval(k, A, B);
+      });
+    }
     case "or":   return n.kids.some(k => qEval(k, A, B));
   }
   return false;
