@@ -106,7 +106,14 @@
   #readScroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
   #readView .reader{max-width:640px;margin:0 auto;padding:16px 20px 24px;}
   #readView h2{font-size:1.3em;color:var(--brown-dark);margin:0;display:inline;}
-  #readView .chnum{color:#999;font-size:.9em;display:inline;margin-left:10px;}
+  #readView .hdr-sel{
+    -webkit-appearance:none;appearance:none;border:none;margin:0;
+    background:transparent url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%238c5e3b'/></svg>") no-repeat right 2px center;
+    font:inherit;font-weight:700;color:var(--brown-dark);
+    padding:2px 18px 2px 0;border-bottom:1px dashed var(--line);border-radius:0;
+  }
+  #readView .hdr-sel.chap{font-size:.9em;font-weight:600;color:#8a7f6e;margin-left:10px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%23999'/></svg>");}
   .ext-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;}
   .ext-label{font-size:.82em;color:#9a8b74;margin-right:2px;}
   .ext-btn{
@@ -471,9 +478,20 @@ function openChapter(bookId, chapter, targetVerse) {
   const chapterData = book && book.chapters[current.chapter];
 
   const box = document.getElementById("readerContent");
+  const bookOpts = BOOK_LIST.map(b => `<option value="${b.id}"${b.id === bookId ? " selected" : ""}>${b.zh}</option>`).join("");
+  const chKeys = book ? Object.keys(book.chapters).sort((a,b)=>+a-+b) : [current.chapter];
+  const chOpts = chKeys.map(c => `<option value="${c}"${c === current.chapter ? " selected" : ""}>第 ${c} 章</option>`).join("");
   document.getElementById("readHeadInner").innerHTML =
-    `<h2>${meta.zh}</h2><span class="chnum">第 ${current.chapter} 章</span>` +
+    `<h2><select id="bookSel" class="hdr-sel" aria-label="經卷">${bookOpts}</select></h2>` +
+    `<select id="chapSel" class="hdr-sel chap" aria-label="章">${chOpts}</select>` +
     `<div id="extLinksBox">${renderExternalLinks(bookId, current.chapter, currentVerse)}</div>`;
+  const bookSel = document.getElementById("bookSel"), chapSel = document.getElementById("chapSel");
+  bookSel.onchange = () => {
+    const nb = VERSES()[bookSel.value];
+    const first = nb ? Object.keys(nb.chapters).sort((a,b)=>+a-+b)[0] : "1";
+    openChapter(bookSel.value, first || "1");
+  };
+  chapSel.onchange = () => openChapter(bookId, chapSel.value);
   let html = "";
   if (chapterData) {
     Object.keys(chapterData).sort((a,b)=>+a-+b).forEach(vn => {
@@ -510,6 +528,7 @@ function openChapter(bookId, chapter, targetVerse) {
 
   updateChapNavButtons();
   switchView("readView");
+  fitSelect(bookSel); fitSelect(chapSel);
   applyFontScale();
   document.getElementById("readScroll").scrollTop = 0;
 
@@ -524,6 +543,17 @@ function openChapter(bookId, chapter, targetVerse) {
       target.scrollIntoView({ block: "center" });
     }
   }
+}
+
+// 讓下拉選單寬度剛好等於目前選到的文字（原生 select 預設會撐到最長選項）
+function fitSelect(sel) {
+  const cs = getComputedStyle(sel);
+  const sp = document.createElement("span");
+  sp.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font:${cs.font};`;
+  sp.textContent = sel.options[sel.selectedIndex].text;
+  document.body.appendChild(sp);
+  sel.style.width = (sp.offsetWidth + 20) + "px";
+  sp.remove();
 }
 
 function updateChapNavButtons(){
