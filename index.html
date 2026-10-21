@@ -478,9 +478,10 @@ function openChapter(bookId, chapter, targetVerse) {
   const chapterData = book && book.chapters[current.chapter];
 
   const box = document.getElementById("readerContent");
-  const bookOpts = BOOK_LIST.map(b => `<option value="${b.id}"${b.id === bookId ? " selected" : ""}>${b.zh}</option>`).join("");
+  const enHdr = isEnglishVersion(); // 英文版本：卷名與章號顯示英文
+  const bookOpts = BOOK_LIST.map(b => `<option value="${b.id}"${b.id === bookId ? " selected" : ""}>${enHdr ? b.en : b.zh}</option>`).join("");
   const chKeys = book ? Object.keys(book.chapters).sort((a,b)=>+a-+b) : [current.chapter];
-  const chOpts = chKeys.map(c => `<option value="${c}"${c === current.chapter ? " selected" : ""}>第 ${c} 章</option>`).join("");
+  const chOpts = chKeys.map(c => `<option value="${c}"${c === current.chapter ? " selected" : ""}>${enHdr ? "Chapter " + c : "第 " + c + " 章"}</option>`).join("");
   document.getElementById("readHeadInner").innerHTML =
     `<h2><select id="bookSel" class="hdr-sel" aria-label="經卷">${bookOpts}</select></h2>` +
     `<select id="chapSel" class="hdr-sel chap" aria-label="章">${chOpts}</select>` +
